@@ -11,8 +11,8 @@ phases:
       - echo $SHELL
       - env
       - ls -lR
-      - ./cfm/run.py -h > out.txt
       - set
+      - python ./cfm/run.py -h > out.txt
 
 artifacts:
   files:
