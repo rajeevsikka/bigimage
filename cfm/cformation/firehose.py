@@ -9,6 +9,8 @@ from troposphere.s3 import (Bucket, PublicRead)
 from troposphere.iam import Role
 from troposphere.iam import PolicyType as IAMPolicy
 
+from troposphere.logs import LogGroup, LogStream
+
 from awacs.aws import Allow, Statement, Action, Principal, Policy
 from awacs.sts import AssumeRole
 
@@ -23,7 +25,7 @@ def template(stackName='bigimage'):
     t.add_description('Kinesis firehose deliver twitter to elasticsearch')
 
     s3bucket = t.add_resource(Bucket(
-        stackName + "Firehose",
+        "firehose",
         AccessControl=PublicRead,
         Tags=Tags(stage=cfnhelper.STAGE),
     ))
@@ -32,6 +34,34 @@ def template(stackName='bigimage'):
         'DomainArn',
         Type='String',
         Description='Elasticsearch domain arn from the elasticsearch template'
+    ))
+
+    FIREHOSE_LOG_GROUP = stackName + "FirehoseLogGroup"
+    logGroup = t.add_resource(LogGroup(
+        FIREHOSE_LOG_GROUP,
+        LogGroupName=FIREHOSE_LOG_GROUP,
+        RetentionInDays=7,
+    ))
+
+    FIREHOSE_LOG_STREAM = stackName + "FirehoseLogStream"
+    logStream = t.add_resource(LogStream(
+        FIREHOSE_LOG_STREAM,
+        LogGroupName=Ref(logGroup),
+        LogStreamName=FIREHOSE_LOG_STREAM,
+    ))
+
+    FIREHOSE_FILE_GROUP = stackName + "FirehoseFileGroup"
+    logFileGroup = t.add_resource(LogGroup(
+        FIREHOSE_FILE_GROUP,
+        LogGroupName=FIREHOSE_FILE_GROUP,
+        RetentionInDays=7,
+    ))
+
+    FIREHOSE_FILE_STREAM = stackName + "FirehoseFileStream"
+    logFileStream = t.add_resource(LogStream(
+        FIREHOSE_FILE_STREAM,
+        LogGroupName=Ref(logFileGroup),
+        LogStreamName=FIREHOSE_FILE_STREAM,
     ))
 
     # Create the role with a trust relationship that allows an ec2 service to assume a role
@@ -71,9 +101,11 @@ def template(stackName='bigimage'):
 
     fireHoseRoleArn = roleArn(role)
     fireHoseBucketRoleArn = roleArn(role)
+    deliveryStreamId = stackName + 'TwitterDeliveryStream'
+    deliveryStreamName = deliveryStreamId
     t.add_resource(DeliveryStream(
-        stackName + 'TwitterDeliveryStream',
-        DeliveryStreamName=stackName + 'TwitterDeliveryStreamName',
+        deliveryStreamId,
+        DeliveryStreamName=deliveryStreamName,
         ElasticsearchDestinationConfiguration=ElasticsearchDestinationConfiguration(
             BufferingHints=BufferingHints(
                 IntervalInSeconds=60,
@@ -81,8 +113,8 @@ def template(stackName='bigimage'):
             ),
             CloudWatchLoggingOptions=CloudWatchLoggingOptions(
                 Enabled=True,
-                LogGroupName='kinesis-log-group',
-                LogStreamName='kinesis-log-stream',
+                LogGroupName=Ref(logGroup),
+                LogStreamName=Ref(logStream),
             ),
             DomainARN=Ref(domainArn),
             IndexName = 'indexname',
@@ -100,8 +132,8 @@ def template(stackName='bigimage'):
                 ),
                 CloudWatchLoggingOptions=CloudWatchLoggingOptions(
                     Enabled=True,
-                    LogGroupName='my-other-log-group',
-                    LogStreamName='my-other-log-stream',
+                    LogGroupName=Ref(logFileGroup),
+                    LogStreamName=Ref(logFileStream),
                 ),
                 CompressionFormat='UNCOMPRESSED',
                 # not required:
@@ -111,7 +143,7 @@ def template(stackName='bigimage'):
                 #    ),
                 #    NoEncryptionConfig='NoEncryption',
                 #),
-                Prefix='my-firehose-prefix-',
+                Prefix='',
                 RoleARN=fireHoseBucketRoleArn,
             ),
             TypeName='testypename',
@@ -121,17 +153,22 @@ def template(stackName='bigimage'):
     t.add_output(Output(
         "S3",
         Value=Ref(s3bucket),
-        Description="Firehose S3 bucket name"
+        Description="Firehose S3 bucket name",
+    ))
+    t.add_output(Output(
+        "DeliveryStreamName",
+        Value=deliveryStreamName,
+        Description="Firehose delivery stream name",
     ))
     t.add_output(Output(
         "RoleArn",
         Value=fireHoseRoleArn,
-        Description="Firehose role arn"
+        Description="Firehose role arn",
     ))
     t.add_output(Output(
         "BucketRoleArn",
         Value=fireHoseBucketRoleArn,
-        Description="Firehose bucket role arn"
+        Description="Firehose bucket role arn",
     ))
 
 

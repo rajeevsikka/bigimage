@@ -14,7 +14,7 @@ import elasticsearch
 import ingest
 import cfnhelper
 
-INGEST = False # TODO
+INGEST = True
 ELASTICSEARCH = True
 FIREHOSE = True
 
@@ -63,8 +63,9 @@ def template(stackName='bigimage'):
             'IngestStack',
             TemplateURL=Join('/', [Ref(templateBucket), ingest.id()]),
             Parameters={
-                'CodeBucket': Ref(codeBucket)
-            }
+                'CodeBucket': Ref(codeBucket),
+                'DeliveryStreamName': GetAtt(firehoseStack, "Outputs.DeliveryStreamName"),
+            },
         ))
         # propogate all outputs from the firehose template
         cfnhelper.propogateNestedStackOutputs(t, ingestStack, ingest.template(), "Ingest")

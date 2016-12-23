@@ -13,33 +13,57 @@ import tempfile
 import shutil
 import importlib
 
+TWITTER_VARIABLES = ['TWITTER_CONSUMER_KEY', 'TWITTER_CONSUMER_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET']
+
 # command line parsing
-parser = argparse.ArgumentParser(description='deploy the application aws by deleting the existing stack and creating a new one') 
-parser.add_argument('-cs', action='store_true', help='generate new templates, upload to bucket, generate change sets')
-#parser.add_argument('-lcs', action='store_true', help='list the change sets')
-parser.add_argument('-d', action='store_true', help='just delete the buckets and the stack and quit, if you need to start from scratch: -d and run again')
+parser = argparse.ArgumentParser(description="""Look at the switches below and notice the commands.
+You can run any of these commands individually.
+If none of the commands are specified then following commands will be run in order: -delete, -code, -template, -create.
+Before the create or update commands are run the twitter credentials will be verified.
+If twitter credential verification fails, fix the problem by setting the env variables and using the -p switch.
+In addition it can be useful to execute -template followed by -update to make changes to the templates then update the existing stack.
+The -name parameter can be used to create multiple stacks, you must use the same name to delete, update, etc.
+""") 
+parser.add_argument('-delete', action='store_true', help='command: delete the buckets and the stack')
+parser.add_argument('-code', action='store_true', help='command: generate code in temporary directory, create s3 bucket, upload code s3 bucket')
+parser.add_argument('-template', action='store_true', help='command: generate cloudformation templates in the temporary directory, create cfn bucket, put the templates into the cfn bucket')
+parser.add_argument('-create', action='store_true', help='command: create the stack from the cloud formation templates created with -template')
+parser.add_argument('-update', action='store_true', help='command: update the stack (normally run with -template)')
+parser.add_argument('-creds', action='store_true', help='command: store twitter credentials, set these environment variables then use the -p option to store them:' + str(TWITTER_VARIABLES))
 parser.add_argument('-k', action='store_true', default=False, help='keep the temporary directory of files that were uploaded to s3')
 parser.add_argument('-n', action='store', default='bigimage', help='name any global objects, like s3 buckets, with this name')
-parser.add_argument('-nc', action='store_true', help='do not generate code and upload to the code s3 bucket')
 parser.add_argument('-s', action='store_true', help='run silently')
-parser.add_argument('-u', action='store_true', help='generate new templates, upload to bucket, update stack')
 args = parser.parse_args()
+
 
 # globals for getting to boto3
 clientSts = boto3.client('sts')
 clientCloudformation = boto3.client('cloudformation')
 clientS3 = boto3.client('s3')
 s3 = boto3.resource('s3')
+ssm = boto3.client('ssm')
+
+# args
+ARG_SILENT = args.s
+ARG_KEEP = args.k
+ARG_NAME = args.n
+
+# commands
+ARG_DELETE = args.delete
+ARG_CODE = args.code
+ARG_TEMPLATE = args.template
+ARG_CREATE = args.create
+ARG_UPDATE = args.update
+ARG_CREDS = args.creds
+
+if (not ARG_DELETE) and (not ARG_CODE) and (not ARG_TEMPLATE) and (not ARG_CREATE) and (not ARG_UPDATE) and (not ARG_CREDS):
+    ARG_DELETE = True
+    ARG_CODE = True
+    ARG_TEMPLATE = True
+    ARG_CREATE = True
+    
 
 # constants
-ARG_SILENT = args.s
-ARG_CODE = not args.nc
-ARG_KEEP = args.k
-ARG_JUST_DELETE = args.d
-ARG_NAME = args.n
-ARG_CHANGE_SET = args.cs
-ARG_UPDATE = args.u
-
 STACK_NAME=ARG_NAME
 ACCOUNT_ID = clientSts.get_caller_identity()['Account']
 S3_TEMPLATE_BUCKET = STACK_NAME + 'cfn' + ACCOUNT_ID # cloudformation template are generated in this script and kept here
@@ -74,6 +98,58 @@ def silentPrint(*args):
     if not ARG_SILENT:
         print(*args)
 
+
+def stackName(name):
+    "turn a environment variable name into a stack specific name"
+    return STACK_NAME + "_" + name
+
+def namedTwitterVariables():
+    "return the stack named twitter variables"
+    ret = []
+    for name in TWITTER_VARIABLES:
+        ret.append(stackName(name))
+    return ret
+
+def storeTwitterCreds():
+    "store the twitter creds as Simple System Management System Parameters"
+    ret = True
+    parameterStore = {}
+    for name in TWITTER_VARIABLES:
+        if not os.environ.has_key(name):
+            print(name, "not in environment")
+            ret = False
+            continue
+        value = os.environ[name]
+        if value == "":
+            print(name, "in environment but does not have a vlue")
+            ret = False
+            continue
+        parameterStore[stackName(name)] = value
+
+    if not ret:
+        return False
+
+    for name in parameterStore:
+        value = parameterStore[name]
+        silentPrint('put_parameter name:', name, "value:", value)
+        ssm.put_parameter(Name=name, Value=value, Type='SecureString', Overwrite=True)
+                
+    return True
+
+
+def verifyTwitterCreds():
+    "veriy that all of the twitter variables for this stack exist"
+    names = namedTwitterVariables()
+    ret = ssm.get_parameters(Names=names, WithDecryption=True)
+    parameters = ret[u'Parameters']
+    for parameter in parameters:
+        print("name:", parameter['Name'], "value:", parameter['Value'])
+    invalidParameters = ret['InvalidParameters']
+    if len(invalidParameters) > 0:
+        print("missing system parameters:", str(invalidParameters))
+        return False
+    return True
+
 def bucketCreate(bucket):
     bucket.create(CreateBucketConfiguration={'LocationConstraint': REGION}, GrantRead='uri="http://acs.amazonaws.com/groups/global/AllUsers"')
 
@@ -91,15 +167,14 @@ def bucketDelete(bucketName):
         pass
     return bucket
 
-def bucketExists(bucketName):
+def bucketExists(bucket):
     'return True if the bucket exists'
-    return s3.Bucket(bucketName) in s3.buckets.all()
+    return bucket in s3.buckets.all()
 
-def bucketNew(bucketName):
+def bucketNew(bucket):
     'create a new bucket'
-    bucket = s3.Bucket(bucketName)
     bucketCreate(bucket)
-    bucket_policy = s3.BucketPolicy(bucketName)
+    bucket_policy = s3.BucketPolicy(bucket.name)
     policy=Template('''{
             "Version": "2012-10-17",
             "Statement": [
@@ -115,7 +190,7 @@ def bucketNew(bucketName):
     ''').substitute(bucket=S3_TEMPLATE_BUCKET)
     silentPrint("s3 teamplate bucket policy:", policy)
     bucket_policy.put(Policy=policy)
-    silentPrint('create bucket:', bucketName)
+    silentPrint('create bucket:', bucket.name)
     return bucket
         
 def localFiles(reString):
@@ -266,12 +341,15 @@ def stackCreateChangeSet(stackName, templateBucket, s3MasterKey, cfnParameters):
 
 def generateAndUploadDir(bucket, inputDir, outputDir):
     'inputDir is a directory that contains a makeawszip.sh script, call the script to create an inputDir.zip file and upload it'
-    outputFile = os.path.join(outputDir, inputDir) # name the file portion of the output zip the same as the directory name
+    #TODO added a _20, this is a kludge, see similar kludge in ingest.py
+    VERSION="_21" # TODO
+    outputFile = os.path.join(outputDir, inputDir + VERSION) # name the file portion of the output zip the same as the directory name #TODO
     systemCmd = "../" + inputDir + '/makeawszip.sh ' + outputFile
     silentPrint("execute:", systemCmd)
     os.system(systemCmd)
     file = outputFile + ".zip"
-    key = inputDir + ".zip"
+    #key = inputDir + VERSION + ".zip" # TODO
+    key = inputDir + ".zip" # TODO
     # https://s3-us-west-2.amazonaws.com/bigimagecfn433331399117/master.cfn.json
     silentPrint("upload:", file, "url:", s3Url(bucket, key))
     bucket.upload_file(file, key)
@@ -285,39 +363,46 @@ def generateAndUploadCode(outputDir, bucketName):
     for inputDir in MAKEAWSZIP_DIRS:
         generateAndUploadDir(bucket, inputDir, outputDir)
 
+if ARG_CREDS:
+    if not storeTwitterCreds():
+        quit()
 
-# populate template bucket with fresh templates.  Generate them in the temporary directory then copy them to s3
-
-if ARG_JUST_DELETE:
+if ARG_DELETE:
     stackDelete(STACK_NAME)
     bucketDelete(S3_TEMPLATE_BUCKET)
     bucketDelete(S3_CODE_BUCKET)
-    quit()
 
-if not bucketExists(S3_TEMPLATE_BUCKET):
-    templateBucket = bucketNew(S3_TEMPLATE_BUCKET)
-
-templateBucket = s3.Bucket(S3_TEMPLATE_BUCKET)
 tempDir = tempfile.mkdtemp()
 silentPrint("temporary directory:", tempDir)
-generateCfn(tempDir)
-bucketPopulate(tempDir, templateBucket)
-if ARG_CHANGE_SET:
-    print("not implemented yet")
-    quit()
-    stackCreateChangeSet(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
-    quit()
 
 # generate new code zips
 if ARG_CODE:
     generateAndUploadCode(tempDir, S3_CODE_BUCKET)
 
-if ARG_UPDATE:
-    stackUpdate(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
-else:
-    # delete the existing stack and create a new stack
-    stackDelete(STACK_NAME)
+# populate template bucket with fresh templates.  Generate them in the temporary directory then copy them to s3
+templateBucket = s3.Bucket(S3_TEMPLATE_BUCKET)
+if ARG_TEMPLATE:
+    if not bucketExists(templateBucket):
+        bucketNew(templateBucket)
+
+    generateCfn(tempDir)
+    bucketPopulate(tempDir, templateBucket)
+
+if ARG_CREATE:
+    if not verifyTwitterCreds():
+        quit()
     stackCreate(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
+
+if ARG_UPDATE:
+    if not verifyTwitterCreds():
+        quit()
+    stackUpdate(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
+
+#if ARG_CHANGE_SET:
+#    print("not implemented yet")
+#    quit()
+#    stackCreateChangeSet(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
+#    quit()
 
 if ARG_KEEP:
     print("temporary directory:", tempDir)

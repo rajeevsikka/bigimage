@@ -18,8 +18,9 @@ from awacs.sts import AssumeRole
 
 import cfnhelper
 
-# bucket that contains the program
-S3BUCKET="elasticbeanstalk-us-west-2-433331399117"
+AWS_DEFAULT_REGION = 'us-west-2'
+VERSION = "_21" #TODO
+
 # choose python or docker
 BEANSTALK_DOCKER = False
 def getBeanstalkEnvironment():
@@ -60,6 +61,12 @@ def template(stackName='bigimage'):
         Type="AWS::EC2::KeyPair::KeyName",
         ConstraintDescription="must be the name of an existing EC2 KeyPair.",
         Default="pics"
+    ))
+
+    deliveryStreamName = t.add_parameter(Parameter(
+        "DeliveryStreamName",
+        Type='String',
+        Description="Firehose delivery stream name",
     ))
 
     # Create the role with a trust relationship that allows an ec2 service to assume a role
@@ -111,9 +118,10 @@ def template(stackName='bigimage'):
         "IngestApplicationVersion",
         Description="Version 2.0",
         ApplicationName=Ref(ingestApplication),
-        SourceBundle=SourceBundle( #S3Bucket=S3BUCKET,
+        SourceBundle=SourceBundle(
             S3Bucket=Ref(codeBucket),
-            S3Key="python-v1.zip"
+            S3Key="python-v1" + ".zip" #TODO kludge see similar kludge in run.py
+            #S3Key="python-v1" + VERSION + ".zip" #TODO kludge see similar kludge in run.py
         ),
     ))
 
@@ -129,19 +137,33 @@ def template(stackName='bigimage'):
             OptionSettings(
                 Namespace="aws:autoscaling:launchconfiguration",
                 OptionName="EC2KeyName",
-                Value=Ref(keyname)
+                Value=Ref(keyname),
             ),
             OptionSettings(
                 Namespace="aws:autoscaling:launchconfiguration",
                 OptionName="IamInstanceProfile",
-                Value=Ref(ec2InstanceProfile)
-            )
+                Value=Ref(ec2InstanceProfile),
+            ),
+            OptionSettings(
+                Namespace="aws:elasticbeanstalk:application:environment",
+                OptionName="DeliveryStreamName",
+                Value=Ref(deliveryStreamName),
+            ),
+            OptionSettings(
+                Namespace="aws:elasticbeanstalk:application:environment",
+                OptionName="StackName",
+                Value=stackName,
+            ),
+            OptionSettings(
+                Namespace="aws:elasticbeanstalk:application:environment",
+                OptionName="AWS_DEFAULT_REGION",
+                Value=AWS_DEFAULT_REGION,
+            ),
         ],
     ))
 
     # add the environment
-    # TODO use return value instead of IngestEnvironment
-    t.add_resource(Environment(
+    ingestEnvironment = t.add_resource(Environment(
         "IngestEnvironment",
         Description="AWS Elastic Beanstalk Environment",
         ApplicationName=Ref(ingestApplication),
@@ -155,7 +177,7 @@ def template(stackName='bigimage'):
         Output(
             "URL",
             Description="URL of the AWS Elastic Beanstalk Environment",
-            Value=Join("", ["http://", GetAtt("IngestEnvironment", "EndpointURL")])
+            Value=Join("", ["http://", GetAtt(ingestEnvironment, "EndpointURL")])
         )
     )
     return t
