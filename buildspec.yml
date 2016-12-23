@@ -8,6 +8,9 @@ environment_variables:
 phases:
   build:
     commands:
+      - echo $SHELL
+      - env
+      - ls -lR
       - ./cfn/run.py -h > out.txt
 
 artifacts:
