@@ -6,6 +6,10 @@ environment_variables:
     POWELL: "value"
             
 phases:
+  install:
+    commands:
+      - pip install -r ./cfm/requirements.txt
+    
   build:
     commands:
       - echo $SHELL
