@@ -16,9 +16,10 @@ phases:
       - env
       - ls -lR
       - set
-      - python ./cfm/run.py -h > out.txt
+      - python ./cfm/run.py -code > out.txt
 
 artifacts:
   files:
+    - build/*
     - out.txt
   discard-paths: yes

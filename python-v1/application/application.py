@@ -97,14 +97,10 @@ jsonArray = [
 
 tweetCount = 0
 
-@application.route('/<path:any>', methods=['GET'])
+@application.route('/', defaults={'path': '/'}, methods=['GET'])
+@application.route('/<path:path>', methods=['GET'])
 def dump(path):
-    print main
-    return jsonify({'~env': dict(os.environ), '~metadata': jsonArray, '~errorStatus': errorStatuses, 'tweetCount': tweetCount, 'env StackName': STACK_NAME, 'env DeliveryStreamName': DELIVERY_STREAM_NAME, 'path': path, 'main': main, 'version': "2.0"})
-
-@application.route('/', methods=['GET'])
-def root():
-    return dump('/')
+    return jsonify({'~env': dict(os.environ), '~metadata': jsonArray, '~errorStatus': errorStatuses, 'tweetCount': tweetCount, 'env StackName': STACK_NAME, 'env DeliveryStreamName': DELIVERY_STREAM_NAME, 'path': path, 'main': main, 'version': "2.1"})
 
 ##################### twitter ###################
 import tweepy

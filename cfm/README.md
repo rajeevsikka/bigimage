@@ -5,12 +5,24 @@ and copy the templates to the bucket. It also creates a code bucket and assemble
 It then runs the cloudformation.
 Try ./run.py -h for more information
 
+Set up your environment, one time:
+
+    pip install virtualenv
+    ./afterclone.sh
+
+Then each time you want to run the program in a new shell:
+
+   source ./sourceme
+
+Then use it:
+
     # build everything, copy, run, ... from scratch (delete it if it already exists)
-    ./run.py
+    ./run.py -h
 
-    # delete everything and quit (no building)
-    ./run.py -d
+# buildpipeline
+* Git
+* Build - execute the run.py script
 
+# More work
 Take another look at:
-
 http://docs.aws.amazon.com/firehose/latest/dev/controlling-access.html#using-iam-s3
