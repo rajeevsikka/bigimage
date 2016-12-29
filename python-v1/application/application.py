@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+VERSION = "2.2"
 # To work the following environment variables must be set:
 # * StackName - twitter credentials are stored in the the aws system manager parameter store prefixed by this name (see TWITTER_VARIABLES)
 # * DeliveryStreamName - firehose delivery stream name
@@ -100,7 +101,7 @@ tweetCount = 0
 @application.route('/', defaults={'path': '/'}, methods=['GET'])
 @application.route('/<path:path>', methods=['GET'])
 def dump(path):
-    return jsonify({'~env': dict(os.environ), '~metadata': jsonArray, '~errorStatus': errorStatuses, 'tweetCount': tweetCount, 'env StackName': STACK_NAME, 'env DeliveryStreamName': DELIVERY_STREAM_NAME, 'path': path, 'main': main, 'version': "2.1"})
+    return jsonify({'~env': dict(os.environ), '~metadata': jsonArray, '~errorStatus': errorStatuses, 'tweetCount': tweetCount, 'env StackName': STACK_NAME, 'env DeliveryStreamName': DELIVERY_STREAM_NAME, 'path': path, 'main': main, 'version': VERSION})
 
 ##################### twitter ###################
 import tweepy
