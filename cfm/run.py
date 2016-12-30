@@ -12,8 +12,14 @@ import re
 import tempfile
 import shutil
 import importlib
+import cformation
+from cformation import *
 
-TWITTER_VARIABLES = ['TWITTER_CONSUMER_KEY', 'TWITTER_CONSUMER_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET']
+# in the cformation directory
+CFORMATION_TEMPLATES = [cformation.master, cformation.ingest, cformation.elasticsearch, cformation.firehose, cformation.codepipeline]
+
+GIT_PERSONAL_ACCESS_TOKEN = 'GIT_PERSONAL_ACCESS_TOKEN'
+TWITTER_VARIABLES = ['TWITTER_CONSUMER_KEY', 'TWITTER_CONSUMER_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET', GIT_PERSONAL_ACCESS_TOKEN]
 
 # command line parsing
 parser = argparse.ArgumentParser(description="""Look at the switches below and notice the commands.
@@ -69,26 +75,32 @@ S3_TEMPLATE_BUCKET = STACK_NAME + 'cfn' + ACCOUNT_ID # cloudformation template a
 S3_CODE_BUCKET=STACK_NAME + 'code' + ACCOUNT_ID # code is generated in this script and kept here
 REGION = boto3.session.Session().region_name
 MASTER_TEMPLATE='master.cfn.json'
-MASTER_TEMPLATE_PARAMETERS=[{
-    'ParameterKey': 'TemplateBucket',
-    'ParameterValue': '{}/{}'.format(clientS3.meta.endpoint_url, S3_TEMPLATE_BUCKET),
-    'UsePreviousValue': False
-},{
-    'ParameterKey': 'CodeBucket',
-    'ParameterValue': S3_CODE_BUCKET,
-    'UsePreviousValue': False
-}]
+
+def masterTemplateParameters():
+    'return the master template parameters, can only be called after verifyTwitterCreds()'
+    gitParameterValue = getTwitterValueFromLastParameters(stackName(GIT_PERSONAL_ACCESS_TOKEN))
+    MASTER_TEMPLATE_PARAMETERS=[{
+        'ParameterKey': 'TemplateBucket',
+        'ParameterValue': '{}/{}'.format(clientS3.meta.endpoint_url, S3_TEMPLATE_BUCKET),
+        'UsePreviousValue': False
+    },{
+        'ParameterKey': 'CodeBucket',
+        'ParameterValue': S3_CODE_BUCKET,
+        'UsePreviousValue': False
+    },{
+        'ParameterKey': 'GitPersonalAccessToken',
+        'ParameterValue': gitParameterValue,
+        'UsePreviousValue': False
+    }]
+    return MASTER_TEMPLATE_PARAMETERS
 
 # each module must have id() and template() functions.
 # id() will return the name of the json file that should be generated
 # template() will return the trophoshpere template
-CFORMATION_TEMPLATES = ['cformation.master', 'cformation.ingest', 'cformation.elasticsearch', 'cformation.firehose']
+
 TROPHOSPHERE_NAME_TEMPLATE = {}
 for moduleName in CFORMATION_TEMPLATES:
-    idModule = importlib.import_module(moduleName)
-    idF = getattr(idModule, 'id')
-    templateF = getattr(idModule, 'template')
-    TROPHOSPHERE_NAME_TEMPLATE.update({idF(): templateF(STACK_NAME)})
+    TROPHOSPHERE_NAME_TEMPLATE.update({moduleName.id(): moduleName.template(STACK_NAME)})
 
 # directories that contain a makeawszip command that will create a zip
 MAKEAWSZIP_DIRS = ['python-v1']
@@ -136,12 +148,21 @@ def storeTwitterCreds():
     return True
 
 
+LAST_TWITTER_PARAMETERS = []
+def getTwitterValueFromLastParameters(name):
+    for parameter in LAST_TWITTER_PARAMETERS:
+        if parameter['Name'] == name:
+            return parameter['Value']
+    print(name, "not found in LAST_TWITTER_PARAMETERS:", LAST_TWITTER_PARAMETERS)
+    quit()
+
 def verifyTwitterCreds():
     "veriy that all of the twitter variables for this stack exist"
     names = namedTwitterVariables()
     ret = ssm.get_parameters(Names=names, WithDecryption=True)
-    parameters = ret[u'Parameters']
-    for parameter in parameters:
+    global LAST_TWITTER_PARAMETERS
+    LAST_TWITTER_PARAMETERS = ret[u'Parameters']
+    for parameter in LAST_TWITTER_PARAMETERS:
         print("name:", parameter['Name'], "value:", parameter['Value'])
     invalidParameters = ret['InvalidParameters']
     if len(invalidParameters) > 0:
@@ -373,11 +394,15 @@ def generateCode(outputDir):
     for inputDirBasename in MAKEAWSZIP_DIRS:
         generateProjectCode(inputDirBasename, outputDir)
 
+# commands --------------------------
+
 if ARG_CREDS:
+    silentPrint("command: creds")
     if not storeTwitterCreds():
         quit()
 
 if ARG_DELETE:
+    silentPrint("command: delete")
     stackDelete(STACK_NAME)
     bucketDelete(S3_TEMPLATE_BUCKET)
     bucketDelete(S3_CODE_BUCKET)
@@ -395,14 +420,17 @@ else:
 
 # generate new code zips
 if ARG_CODE:
+    silentPrint("command: code")
     generateCode(tempDir)
 
 if ARG_CODEUPLOAD:
+    silentPrint("command: codeupload")
     uploadCode(tempDir, S3_CODE_BUCKET)
 
 # populate template bucket with fresh templates.  Generate them in the temporary directory then copy them to s3
 templateBucket = s3.Bucket(S3_TEMPLATE_BUCKET)
 if ARG_TEMPLATE:
+    silentPrint("command: template")
     if not bucketExists(templateBucket):
         bucketNew(templateBucket)
 
@@ -410,19 +438,21 @@ if ARG_TEMPLATE:
     bucketPopulate(tempDir, templateBucket)
 
 if ARG_CREATE:
+    silentPrint("command: create")
     if not verifyTwitterCreds():
         quit()
-    stackCreate(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
+    stackCreate(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters())
 
 if ARG_UPDATE:
+    silentPrint("command: update")
     if not verifyTwitterCreds():
         quit()
-    stackUpdate(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
+    stackUpdate(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters())
 
 #if ARG_CHANGE_SET:
 #    print("not implemented yet")
 #    quit()
-#    stackCreateChangeSet(STACK_NAME, templateBucket, MASTER_TEMPLATE, MASTER_TEMPLATE_PARAMETERS)
+#    stackCreateChangeSet(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters())
 #    quit()
 
 print("temporary directory:", tempDir)

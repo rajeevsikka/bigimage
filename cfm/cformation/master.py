@@ -13,10 +13,12 @@ import firehose
 import elasticsearch
 import ingest
 import cfnhelper
+import codepipeline
 
 INGEST = True
 ELASTICSEARCH = True
 FIREHOSE = True
+CODEPIPELINE = True
 
 def id():
     return 'master.cfn.json'
@@ -39,6 +41,12 @@ def template(stackName='bigimage'):
         'CodeBucket',
         Type='String',
         Description='Bucket containing all of the templates for this stack, simple bucket name, example: elasticbeanstalk-us-west-2-433331399117'
+    ))
+
+    gitPersonalAccessToken = t.add_parameter(Parameter(
+        'GitPersonalAccessToken',
+        Type='String',
+        Description='Git personal access token required for codepipeline'
     ))
 
     if ELASTICSEARCH:
@@ -70,7 +78,21 @@ def template(stackName='bigimage'):
         # propogate all outputs from the firehose template
         cfnhelper.propogateNestedStackOutputs(t, ingestStack, ingest.template(), "Ingest")
 
+    if CODEPIPELINE:
+        codepipelineStack = t.add_resource(Stack(
+            'CodepipelineStack',
+            TemplateURL=Join('/', [Ref(templateBucket), codepipeline.id()]),
+            Parameters={
+                'IngestApplicationName': GetAtt(ingestStack, "Outputs.ApplicationName"),
+                'IngestEnvironmentName': GetAtt(ingestStack, "Outputs.EnvironmentName"),
+                'GitPersonalAccessToken': Ref(gitPersonalAccessToken),
+            },
+        ))
+        cfnhelper.propogateNestedStackOutputs(t, codepipelineStack, codepipeline.template(), "Codepipeline")
+
     return t
+
+
 
 if __name__ == "__main__":
     print(template('foo').to_json())

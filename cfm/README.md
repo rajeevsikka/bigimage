@@ -19,8 +19,8 @@ Then use it:
     # build everything, copy, run, ... from scratch (delete it if it already exists)
     ./run.py -h
 
-# buildpipeline
-* Git
+# codepipeline
+* Create a personal access token (get it from powell?) [Aws from github](http://docs.aws.amazon.com/codepipeline/latest/userguide/troubleshooting.html#troubleshooting-gs2)
 * Build - execute the run.py script
 
 # More work

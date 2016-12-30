@@ -116,7 +116,7 @@ def template(stackName='bigimage'):
     # dynamically generate aplication version: stackname-ingestapplicationversion-uid
     ingestApplicationVersion = t.add_resource(ApplicationVersion(
         "IngestApplicationVersion",
-        Description="Version 2.0",
+        Description="Version 2.x",
         ApplicationName=Ref(ingestApplication),
         SourceBundle=SourceBundle(
             S3Bucket=Ref(codeBucket),
@@ -178,6 +178,20 @@ def template(stackName='bigimage'):
             "URL",
             Description="URL of the AWS Elastic Beanstalk Environment",
             Value=Join("", ["http://", GetAtt(ingestEnvironment, "EndpointURL")])
+        )
+    )
+    t.add_output(
+        Output(
+            "ApplicationName",
+            Description="ingest beanstalk application name",
+            Value=Ref(ingestApplication),
+        )
+    )
+    t.add_output(
+        Output(
+            "EnvironmentName",
+            Description="ingest beanstalk environment name",
+            Value=Ref(ingestEnvironment),
         )
     )
     return t
