@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-VERSION = "2.3"
+VERSION = "2.4"
 # To work the following environment variables must be set:
 # * StackName - twitter credentials are stored in the the aws system manager parameter store prefixed by this name (see TWITTER_VARIABLES)
 # * DeliveryStreamName - firehose delivery stream name
