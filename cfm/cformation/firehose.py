@@ -27,6 +27,7 @@ def template(stackName='bigimage'):
     s3bucket = t.add_resource(Bucket(
         "firehose",
         AccessControl=PublicRead,
+        DeletionPolicy='Retain',
         Tags=Tags(stage=cfnhelper.STAGE),
     ))
 

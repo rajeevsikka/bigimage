@@ -16,10 +16,10 @@ import cformation
 from cformation import *
 
 # in the cformation directory
-CFORMATION_TEMPLATES = [cformation.master, cformation.ingest, cformation.elasticsearch, cformation.firehose, cformation.codepipeline]
+CFORMATION_TEMPLATES = [cformation.master, cformation.ingest, cformation.elasticsearch, cformation.firehose, cformation.codepipeline, cformation.api_lambda]
 
 GIT_PERSONAL_ACCESS_TOKEN = 'GIT_PERSONAL_ACCESS_TOKEN'
-TWITTER_VARIABLES = ['TWITTER_CONSUMER_KEY', 'TWITTER_CONSUMER_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET', GIT_PERSONAL_ACCESS_TOKEN]
+SECRETS = set(['TWITTER_CONSUMER_KEY', 'TWITTER_CONSUMER_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET', GIT_PERSONAL_ACCESS_TOKEN])
 
 # command line parsing
 parser = argparse.ArgumentParser(description="""Look at the switches below and notice the commands.
@@ -36,9 +36,11 @@ parser.add_argument('-codeupload', action='store_true', help='command: upload th
 parser.add_argument('-template', action='store_true', help='command: generate cloudformation templates in the temporary directory, create cfn bucket, put the templates into the cfn bucket')
 parser.add_argument('-create', action='store_true', help='command: create the stack from the cloud formation templates created with -template')
 parser.add_argument('-update', action='store_true', help='command: update the stack (normally run with -template)')
-parser.add_argument('-creds', action='store_true', help='command: store twitter credentials, set these environment variables then use the -p option to store them:' + str(TWITTER_VARIABLES))
+parser.add_argument('-creds', action='store_true', help='command: store secrets, set these environment variables then use the -creds option to store them:' + str(SECRETS))
+parser.add_argument('-credsprint', action='store_true', help='command: print the stored secrets use after -creds to see the restuls')
 parser.add_argument('-n', action='store', default='bigimage', help='name any global objects, like s3 buckets, with this name')
 parser.add_argument('-s', action='store_true', help='run silently')
+parser.add_argument('-c', action='store_true', help='run all the commands to create from scratch, often run after -delete or first time, any command parameters are ignored')
 args = parser.parse_args()
 
 
@@ -52,6 +54,7 @@ ssm = boto3.client('ssm')
 # args
 ARG_SILENT = args.s
 ARG_NAME = args.n
+ARG_CREATEALL = args.c
 
 # commands
 ARG_DELETE = args.delete
@@ -61,8 +64,16 @@ ARG_TEMPLATE = args.template
 ARG_CREATE = args.create
 ARG_UPDATE = args.update
 ARG_CREDS = args.creds
+ARG_CREDSPRINT = args.credsprint
 
-if (not ARG_DELETE) and (not ARG_CODE) and (not ARG_TEMPLATE) and (not ARG_CREATE) and (not ARG_UPDATE) and (not ARG_CREDS):
+if ARG_CREATEALL:
+    ARG_CODE = True
+    ARG_CODEUPLOAD = True
+    ARG_TEMPLATE = True
+    ARG_CREATE = True
+
+# default is update
+if (not ARG_DELETE) and (not ARG_CODE) and (not ARG_TEMPLATE) and (not ARG_CREATE) and (not ARG_UPDATE) and (not ARG_CREDS) and (not ARG_CREDSPRINT):
     ARG_CODE = True
     ARG_CODEUPLOAD = True
     ARG_TEMPLATE = True
@@ -76,9 +87,95 @@ S3_CODE_BUCKET=STACK_NAME + 'code' + ACCOUNT_ID # code is generated in this scri
 REGION = boto3.session.Session().region_name
 MASTER_TEMPLATE='master.cfn.json'
 
-def masterTemplateParameters():
-    'return the master template parameters, can only be called after verifyTwitterCreds()'
-    gitParameterValue = getTwitterValueFromLastParameters(stackName(GIT_PERSONAL_ACCESS_TOKEN))
+def silentPrint(*args):
+    if not ARG_SILENT:
+        print(*args)
+
+class NamedSecrets:
+    '''Manage a list of secrets for a specific stack name (see -n parameter) in the AWS parameter store
+    invoked secrets = NamedSecrets(name, secretSet) where name is the name of the stack and secretSet is a set of secrets to keep track of
+    '''
+    def __init__(self, name, secrets):
+        self.name = name
+        self.secrets = secrets
+
+    def _namedSecret(self, secret):
+        "return a named secret by prepending the name (see -n parameter) to the secret"
+        return self.name + "_" + secret
+
+    def _namedSecrets(self):
+        "return a set of named twitter variables"
+        ret = set()
+        for secret in self.secrets:
+            ret.add(self._namedSecret(secret))
+        return ret
+
+    def readVerifyRememberStoredSecrets(self):
+        "veriy that all of the secrets have been stored"
+
+        # only need to call this function one time, the results are remembered
+        if hasattr(self, 'namedSecretValues'):
+            return True
+
+        namedSecrets = list(self._namedSecrets())
+        ret = ssm.get_parameters(Names=namedSecrets, WithDecryption=True)
+        namedSecretValues = {}
+        parameters = ret[u'Parameters']
+        for parameter in parameters:
+            namedSecretValues[parameter['Name']] = parameter['Value']
+
+        invalidParameters = ret['InvalidParameters']
+        if len(invalidParameters) > 0:
+            print("missing system parameters:", str(invalidParameters))
+            return False
+
+        returnedNamedSecrets = set(namedSecretValues.keys())
+        if returnedNamedSecrets != self._namedSecrets():
+            print("all secrets not stored, crazy, secrets returned:", returnedNamedSecrets, "secrets expected:", self._namedSecrets())
+            return False
+
+        self.namedSecretValues = namedSecretValues
+        return True
+
+    def getRememberedSecretValue(self, secret):
+        "call after readVerifyRememberStoredSecrets() to return the value associated with a secret"
+        return self.namedSecretValues[self._namedSecret(secret)]
+
+
+    def storeSecrets(self):
+        "store the secrets as Simple System Management System Parameters, return false if something goes wrong"
+        ret = True
+        parameterStore = {}
+        for secret in self.secrets:
+            if not os.environ.has_key(secret):
+                print(secret, "not in environment")
+                ret = False
+                continue
+            value = os.environ[secret]
+            if value == "":
+                print(secret, "in environment but does not have a vlue")
+                ret = False
+                continue
+            parameterStore[self._namedSecret(secret)] = value
+
+        if not ret:
+            return False
+
+        for secret in parameterStore:
+            value = parameterStore[secret]
+            ssm.put_parameter(Name=secret, Value=value, Type='SecureString', Overwrite=True)
+
+        if not self.readVerifyRememberStoredSecrets():
+            return False
+
+        if not (parameterStore == self.namedSecretValues):
+            print("values stored do not match the environment variables, crazy")
+                    
+        return True
+
+def masterTemplateParameters(secrets):
+    'return the master template parameters'
+    gitParameterValue = secrets.getRememberedSecretValue(GIT_PERSONAL_ACCESS_TOKEN)
     MASTER_TEMPLATE_PARAMETERS=[{
         'ParameterKey': 'TemplateBucket',
         'ParameterValue': '{}/{}'.format(clientS3.meta.endpoint_url, S3_TEMPLATE_BUCKET),
@@ -104,71 +201,6 @@ for moduleName in CFORMATION_TEMPLATES:
 
 # directories that contain a makeawszip command that will create a zip
 MAKEAWSZIP_DIRS = ['python-v1']
-
-def silentPrint(*args):
-    if not ARG_SILENT:
-        print(*args)
-
-
-def stackName(name):
-    "turn a environment variable name into a stack specific name"
-    return STACK_NAME + "_" + name
-
-def namedTwitterVariables():
-    "return the stack named twitter variables"
-    ret = []
-    for name in TWITTER_VARIABLES:
-        ret.append(stackName(name))
-    return ret
-
-def storeTwitterCreds():
-    "store the twitter creds as Simple System Management System Parameters"
-    ret = True
-    parameterStore = {}
-    for name in TWITTER_VARIABLES:
-        if not os.environ.has_key(name):
-            print(name, "not in environment")
-            ret = False
-            continue
-        value = os.environ[name]
-        if value == "":
-            print(name, "in environment but does not have a vlue")
-            ret = False
-            continue
-        parameterStore[stackName(name)] = value
-
-    if not ret:
-        return False
-
-    for name in parameterStore:
-        value = parameterStore[name]
-        silentPrint('put_parameter name:', name, "value:", value)
-        ssm.put_parameter(Name=name, Value=value, Type='SecureString', Overwrite=True)
-                
-    return True
-
-
-LAST_TWITTER_PARAMETERS = []
-def getTwitterValueFromLastParameters(name):
-    for parameter in LAST_TWITTER_PARAMETERS:
-        if parameter['Name'] == name:
-            return parameter['Value']
-    print(name, "not found in LAST_TWITTER_PARAMETERS:", LAST_TWITTER_PARAMETERS)
-    quit()
-
-def verifyTwitterCreds():
-    "veriy that all of the twitter variables for this stack exist"
-    names = namedTwitterVariables()
-    ret = ssm.get_parameters(Names=names, WithDecryption=True)
-    global LAST_TWITTER_PARAMETERS
-    LAST_TWITTER_PARAMETERS = ret[u'Parameters']
-    for parameter in LAST_TWITTER_PARAMETERS:
-        print("name:", parameter['Name'], "value:", parameter['Value'])
-    invalidParameters = ret['InvalidParameters']
-    if len(invalidParameters) > 0:
-        print("missing system parameters:", str(invalidParameters))
-        return False
-    return True
 
 def bucketCreate(bucket):
     bucket.create(CreateBucketConfiguration={'LocationConstraint': REGION}, GrantRead='uri="http://acs.amazonaws.com/groups/global/AllUsers"')
@@ -213,16 +245,6 @@ def bucketNew(bucket):
     silentPrint('create bucket:', bucket.name)
     return bucket
         
-def localFiles(reString):
-    'return the files in this directory (just files not directories) that match the regular expression'
-    prog = re.compile(reString)
-    files = []
-    for filename in os.listdir("."):
-        if not prog.match(filename):
-            continue
-        files.append(filename)
-    return files
-
 def bucketPopulate(tempDir, bucket):
     'populate the bucket with the cf.json files in this directory'
     for key in TROPHOSPHERE_NAME_TEMPLATE:
@@ -230,29 +252,11 @@ def bucketPopulate(tempDir, bucket):
         silentPrint("upload:", localFile, "url:", s3Url(bucket, key))
         bucket.upload_file(localFile, key)
 
-
-def nameToCfnJsonName(name):
-    return name + ".cfn.json"
-
 def generateCfn(outputDir):
     'generate the cloudformation templates for all the *.cfn.py files in this directory'
     for key, template in TROPHOSPHERE_NAME_TEMPLATE.iteritems():
         outputFile = open(os.path.join(outputDir, key), "w")
         outputFile.write(template.to_json())
-
-def stackDeleteWait(stackName):
-    waiter = clientCloudformation.get_waiter('stack_delete_complete')
-    silentPrint("waiting for cloudformation stack to be deleted:", stackName)
-    waiter.wait(StackName=stackName)
-
-
-def stackDelete(stackName):
-    try:
-        silentPrint("delete stack:", stackName)
-        clientCloudformation.delete_stack(StackName=stackName)
-    except:
-        return
-    stackDeleteWait(stackName)
 
 def stackWait(stackName, waitName):
     silentPrint("waiting for cloudformation stack to be", waitName, "stack:", stackName)
@@ -264,6 +268,17 @@ def stackCreateWait(stackName):
 
 def stackUpdateWait(stackName):
     stackWait(stackName, 'stack_update_complete')
+
+def stackDeleteWait(stackName):
+    stackWait(stackName, 'stack_delete_complete')
+
+def stackDelete(stackName):
+    try:
+        silentPrint("delete stack:", stackName)
+        clientCloudformation.delete_stack(StackName=stackName)
+        stackDeleteWait(stackName)
+    except:
+        return
 
 def s3Url(s3Bucket, s3Key):
     return '{}/{}/{}'.format(clientS3.meta.endpoint_url, s3Bucket.name, s3Key)
@@ -396,10 +411,18 @@ def generateCode(outputDir):
 
 # commands --------------------------
 
+secrets = NamedSecrets(ARG_NAME, SECRETS)
+
 if ARG_CREDS:
     silentPrint("command: creds")
-    if not storeTwitterCreds():
+    if not secrets.storeSecrets():
         quit()
+
+if ARG_CREDSPRINT:
+    if not secrets.readVerifyRememberStoredSecrets():
+        quit()
+    print(secrets.namedSecretValues)
+    
 
 if ARG_DELETE:
     silentPrint("command: delete")
@@ -439,20 +462,20 @@ if ARG_TEMPLATE:
 
 if ARG_CREATE:
     silentPrint("command: create")
-    if not verifyTwitterCreds():
+    if not secrets.readVerifyRememberStoredSecrets():
         quit()
-    stackCreate(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters())
+    stackCreate(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters(secrets))
 
 if ARG_UPDATE:
     silentPrint("command: update")
-    if not verifyTwitterCreds():
+    if not secrets.readVerifyRememberStoredSecrets():
         quit()
-    stackUpdate(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters())
+    stackUpdate(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters(secrets))
 
 #if ARG_CHANGE_SET:
 #    print("not implemented yet")
 #    quit()
-#    stackCreateChangeSet(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters())
+#    stackCreateChangeSet(STACK_NAME, templateBucket, MASTER_TEMPLATE, masterTemplateParameters(secrets))
 #    quit()
 
 print("temporary directory:", tempDir)

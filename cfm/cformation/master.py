@@ -14,11 +14,13 @@ import elasticsearch
 import ingest
 import cfnhelper
 import codepipeline
+import api_lambda
 
 INGEST = True
 ELASTICSEARCH = True
 FIREHOSE = True
 CODEPIPELINE = True
+API_LAMBDA = True
 
 def id():
     return 'master.cfn.json'
@@ -90,9 +92,14 @@ def template(stackName='bigimage'):
         ))
         cfnhelper.propogateNestedStackOutputs(t, codepipelineStack, codepipeline.template(), "Codepipeline")
 
+    if API_LAMBDA:
+        apiStack = t.add_resource(Stack(
+            'ApiStack',
+            TemplateURL=Join('/', [Ref(templateBucket), api_lambda.id()]),
+        ))
+        cfnhelper.propogateNestedStackOutputs(t, apiStack, api_lambda.template(), "External")
+
     return t
-
-
 
 if __name__ == "__main__":
     print(template('foo').to_json())

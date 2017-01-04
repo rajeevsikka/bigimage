@@ -95,6 +95,7 @@ def template(stackName='bigimage'):
     codepipelineBucket = t.add_resource(Bucket(
         "codepipelineBucket",
         AccessControl=PublicRead,
+        DeletionPolicy='Retain',
         Tags=Tags(stage=cfnhelper.STAGE),
     ))
 
