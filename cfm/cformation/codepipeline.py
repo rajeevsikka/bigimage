@@ -159,7 +159,7 @@ def template(stackName='bigimage'):
                 ]
             ),
             Stages(
-                Name="Build",
+                Name="Build application and Deploy cloudformation stack",
                 Actions=[
                     Actions(
                         Name="buildaction",
@@ -187,7 +187,7 @@ def template(stackName='bigimage'):
                 ]
             ),
             Stages(
-                Name="Prod",
+                Name="Deploy ingest application",
                 Actions=[
                     Actions(
                         Name="deploybeanstalk",
