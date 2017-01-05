@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from troposphere import Template, Ref, GetAtt, Output, Tags, Parameter
 from troposphere.iam import Role
-from troposphere.iam import PolicyType as IAMPolicy
+from troposphere.iam import Policy as TropospherePolicy
 from awacs.aws import Allow, Statement, Action, Principal, Policy
 from awacs.sts import AssumeRole
 from troposphere.codepipeline import (
@@ -26,6 +26,7 @@ def template(stackName='bigimage'):
     t.add_description('Codepipeline and codebuild for ' + stackName)
 
     # Create the role with a trust relationship that allows codebuild to assume the role
+    # TODO the code build role runs the run.py to do the complete roll out and needs lots of privileges, the pipeline does not
     codeRole = t.add_resource(Role(
         "CodeRole",
         AssumeRolePolicyDocument=Policy(
@@ -45,23 +46,22 @@ def template(stackName='bigimage'):
             ]
         ),
         Path="/",
+        Policies=[TropospherePolicy(
+            "CodebuildAndCodepipelinePolicy",
+            PolicyName="CodebuildAndCodepipelinePolicy",
+            PolicyDocument=Policy(
+                Statement=[
+                    Statement(
+                        Effect=Allow,
+                        Resource=["*"],
+                    ),
+                ]
+            ),
+        )],
     ))
     codebuildRoleArn = GetAtt(codeRole, "Arn")
 
     # codebuild -------------------
-    # Add a policy directly to the role (a policy in the policy view is not created)
-    t.add_resource(IAMPolicy(
-        "CodebuildPolicy",
-        PolicyName="CodebuildPolicy",
-        PolicyDocument=Policy(
-            Statement=[
-                Statement(
-                    Effect=Allow,
-                    NotAction=Action("iam", "*"),
-                    Resource=["*"],),
-            ]),
-        Roles=[Ref(codeRole)],
-    ))
 
     artifacts = Artifacts(Type=CODEPIPELINE)
 
