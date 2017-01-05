@@ -11,7 +11,7 @@ from troposphere.s3 import (Bucket, PublicRead)
 
 
 # TODO change this line and module when codebuild is released by troposphere
-from troposphere_early_release.codebuild import Artifacts, Environment, EnvironmentVariable, Source, Project
+from troposphere_early_release.codebuild import Artifacts, Environment, Source, Project
 
 import cfnhelper
 
@@ -69,7 +69,7 @@ def template(stackName='bigimage'):
         ComputeType='BUILD_GENERAL1_SMALL',
         Image='aws/codebuild/python:2.7.12',
         Type='LINUX_CONTAINER',
-        EnvironmentVariables=[EnvironmentVariable(Name='BUILD_TYPE', Value='ingest')],
+        EnvironmentVariables=[],
     )
 
     # using CODEPIPELINE

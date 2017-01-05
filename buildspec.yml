@@ -16,7 +16,7 @@ phases:
       - env
       - ls -lR
       - set
-      - python ./cfm/run.py -code > out.txt
+      - python ./cfm/run.py -update > out.txt
       - unzip -d build build/python-v1.zip
 
 artifacts:
