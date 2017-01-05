@@ -16,11 +16,12 @@ phases:
       - env
       - ls -lR
       - set
-      - python ./cfm/run.py -update > out.txt
+      - python ./cfm/run.py -update
+      - ls -lR
       - unzip -d build build/python-v1.zip
+      - ls -lR
 
 artifacts:
   files:
     - build/*
-    - out.txt
   discard-paths: yes
