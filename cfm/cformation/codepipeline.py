@@ -53,6 +53,7 @@ def template(stackName='bigimage'):
                 Statement=[
                     Statement(
                         Effect=Allow,
+                        Action=[Action("*")],
                         Resource=["*"],
                     ),
                 ]

@@ -6,6 +6,7 @@ from string import Template
 # other parameters (yet to be defined) will roll out a smaller change
 
 import boto3
+import botocore
 import os
 import argparse
 import re
@@ -14,6 +15,7 @@ import shutil
 import importlib
 import cformation
 from cformation import *
+import json
 
 # in the cformation directory
 CFORMATION_TEMPLATES = [cformation.master, cformation.ingest, cformation.elasticsearch, cformation.firehose, cformation.codepipeline, cformation.api_lambda]
@@ -40,7 +42,6 @@ parser.add_argument('-creds', action='store_true', help='command: store secrets,
 parser.add_argument('-credsprint', action='store_true', help='command: print the stored secrets use after -creds to see the restuls')
 parser.add_argument('-n', action='store', default='bigimage', help='name any global objects, like s3 buckets, with this name')
 parser.add_argument('-s', action='store_true', help='run silently')
-parser.add_argument('-c', action='store_true', help='run all the commands to create from scratch, often run after -delete or first time, any command parameters are ignored')
 args = parser.parse_args()
 
 
@@ -54,7 +55,6 @@ ssm = boto3.client('ssm')
 # args
 ARG_SILENT = args.s
 ARG_NAME = args.n
-ARG_CREATEALL = args.c
 
 # commands
 ARG_DELETE = args.delete
@@ -66,17 +66,11 @@ ARG_UPDATE = args.update
 ARG_CREDS = args.creds
 ARG_CREDSPRINT = args.credsprint
 
-if ARG_CREATEALL:
-    ARG_CODE = True
-    ARG_CODEUPLOAD = True
-    ARG_TEMPLATE = True
-    ARG_CREATE = True
-
-# default is update
 if (not ARG_DELETE) and (not ARG_CODE) and (not ARG_TEMPLATE) and (not ARG_CREATE) and (not ARG_UPDATE) and (not ARG_CREDS) and (not ARG_CREDSPRINT):
     ARG_CODE = True
     ARG_CODEUPLOAD = True
     ARG_TEMPLATE = True
+    ARG_CREATE = True
     ARG_UPDATE = True
 
 # constants
@@ -459,6 +453,20 @@ if ARG_TEMPLATE:
 
     generateCfn(tempDir)
     bucketPopulate(tempDir, templateBucket)
+
+# both set then create if it does not exist and update otherwise
+if ARG_CREATE and ARG_UPDATE:
+    try:
+        stack = clientCloudformation.describe_stacks(StackName=ARG_NAME)
+        silentPrint("stack exists, update stack")
+        ARG_CREATE = False # found the stack, update do not create
+    except botocore.exceptions.ClientError as ex:
+        if ("Stack with id" in str(ex)) and ("does not exist" in str(ex)):
+            silentPrint("stack does not exist, create stack")
+            ARG_UPDATE = False # stack does not exist, create the stack
+        else:
+            raise ex
+
 
 if ARG_CREATE:
     silentPrint("command: create")
