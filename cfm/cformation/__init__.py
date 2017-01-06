@@ -1,1 +1,1 @@
-__all__ = ['master', 'ingest', 'elasticsearch', 'firehose', 'codepipeline', 'api_lambda']
+__all__ = ['master', 'ingest', 'elasticsearch', 'firehose', 'codepipeline', 'api_lambda', 'cloudfront']
