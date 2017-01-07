@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from troposphere import Template, Parameter, Ref, Output, Join, Tags, GetAtt
+from troposphere import Template, Parameter, Ref, Output, Tags, GetAtt
 from troposphere.firehose import (
     BufferingHints, CloudWatchLoggingOptions, CopyCommand, DeliveryStream,
     EncryptionConfiguration, KMSEncryptionConfig, ElasticsearchDestinationConfiguration, S3Configuration, RetryOptions)
@@ -126,7 +126,7 @@ def template(stackName='bigimage'):
             RoleARN=fireHoseRoleArn,
             S3BackupMode='AllDocuments',
             S3Configuration=S3Configuration(
-                BucketARN=s3BucketArn(s3bucket),
+                BucketARN=cfnhelper.s3BucketArn(s3bucket),
                 BufferingHints=BufferingHints(
                     IntervalInSeconds=60,
                     SizeInMBs=5,
@@ -174,9 +174,6 @@ def template(stackName='bigimage'):
 
 
     return t
-
-def s3BucketArn(bucketReference):
-   return Join("", ["arn:aws:s3:::", Ref(bucketReference)])
 
 def roleArn(roleReference):
    return GetAtt(roleReference, "Arn")

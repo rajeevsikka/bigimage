@@ -13,13 +13,13 @@ from troposphere_early_release.awslambda import Environment, Function, Code
 from troposphere.apigateway import RestApi, Method
 from troposphere.apigateway import Resource, MethodResponse
 from troposphere.apigateway import Integration, IntegrationResponse
-from troposphere.apigateway import Deployment
+from troposphere.apigateway import Deployment, StageDescription, MethodSetting
 from troposphere.apigateway import ApiKey, StageKey
 
 import os
 import cfnhelper
 
-REST_API = True # can turn off for testing
+REST_API = False # can turn off for testing
 STAGE_NAME = 'v1'
 
 def id():
@@ -185,6 +185,34 @@ def template(stackName='bigimage'):
             "%sDeployment" % STAGE_NAME,
             DependsOn=restApiKeywordGetMethod.name,
             RestApiId=Ref(rest_api),
+            StageDescription=StageDescription(
+                CacheClusterEnabled=True, # : (bool, False),
+                CacheClusterSize="0.5", # : (basestring, False),
+                CacheDataEncrypted=False, # : (bool, False),
+                #CacheTtlInSeconds=30, # : (positive_integer, False),
+                #CachingEnabled=True, # : (bool, False),
+                #ClientCertificateId= : (basestring, False),
+                #DataTraceEnabled=False, # : (bool, False),
+                Description="Cached stage ttl=30, cache size = 0.5G", # : (basestring, False),
+                #LoggingLevel= : (basestring, False),
+                MethodSettings=[MethodSetting(
+                    #CacheDataEncrypted=False, #: (bool, False),
+                    CacheTtlInSeconds=30, #": (positive_integer, False),
+                    CachingEnabled=True, #": (bool, False),
+                    #DataTraceEnabled= False, #": (bool, False),
+                    HttpMethod='*', # : (basestring, True),
+                    #LoggingLevel= "OFF", #: (basestring, False),
+                    #MetricsEnabled=False, # : (bool, False),
+                    ResourcePath='/*', # : (basestring, True),
+                    #ThrottlingBurstLimit=2000, # : (positive_integer, False),
+                    #ThrottlingRateLimit=1000, # : (positive_integer, False)
+                )],
+                MetricsEnabled=False, # : (bool, False),
+                StageName=STAGE_NAME, # : (basestring, False),
+                #ThrottlingBurstLimit= : (positive_integer, False),
+                #ThrottlingRateLimit= : (positive_integer, False),
+                #Variables= : (dict, False)
+            ),
             StageName=STAGE_NAME
         ))
 

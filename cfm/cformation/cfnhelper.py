@@ -1,4 +1,4 @@
-from troposphere import Output, GetAtt
+from troposphere import Output, GetAtt, Join, Ref
 
 STAGE = 'prod'
 def propogateNestedStackOutputs(t, nestedStack, nestedTemplate, prefixString): 
@@ -10,3 +10,7 @@ def propogateNestedStackOutputs(t, nestedStack, nestedTemplate, prefixString):
             Description=output.Description,
             Value=GetAtt(nestedStack, "Outputs." + k),
         ))
+
+def s3BucketArn(bucketReference):
+   return Join("", ["arn:aws:s3:::", Ref(bucketReference)])
+

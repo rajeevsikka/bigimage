@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from troposphere import Template, Ref, GetAtt, Output, Tags, Parameter
+from troposphere import Template, Ref, Join, GetAtt, Output, Tags, Parameter
 from troposphere.iam import Role
 from troposphere.iam import Policy as TropospherePolicy
 from awacs.aws import Allow, Statement, Action, Principal, Policy
@@ -7,11 +7,11 @@ from awacs.sts import AssumeRole
 from troposphere.codepipeline import (
     Pipeline, Stages, Actions, ActionTypeID, OutputArtifacts, InputArtifacts,
     ArtifactStore, DisableInboundStageTransitions)
-from troposphere.s3 import (Bucket, PublicRead)
+from troposphere.s3 import (Bucket, BucketPolicy, PublicRead, WebsiteConfiguration)
 
 
 # TODO change this line and module when codebuild is released by troposphere
-from troposphere_early_release.codebuild import Artifacts, Environment, Source, Project
+from troposphere_early_release.codebuild import Artifacts, Environment, EnvironmentVariable, Source, Project
 
 import cfnhelper
 
@@ -62,7 +62,7 @@ def template(stackName='bigimage'):
     ))
     codebuildRoleArn = GetAtt(codeRole, "Arn")
 
-    # codebuild -------------------
+    # codebuild to execute run.py to deploy cloud and create ingest zip  -------------------
 
     artifacts = Artifacts(Type=CODEPIPELINE)
 
@@ -73,14 +73,7 @@ def template(stackName='bigimage'):
         EnvironmentVariables=[],
     )
 
-    # using CODEPIPELINE
-    if True:
-        source = Source(Type=CODEPIPELINE)
-    else:
-        source = Source(
-            Type="GITHUB",
-            Location="https://github.com/powellquiring/bigimage.git",
-        )
+    source = Source(Type=CODEPIPELINE)
 
     codeBuildProject = Project(
         stackName + "CodeBuildProject",
@@ -91,6 +84,58 @@ def template(stackName='bigimage'):
         Source=source,
     )
     t.add_resource(codeBuildProject)
+
+    # codebuild to build browser application and write to s3 -------------------
+    browserBucket = t.add_resource(Bucket(
+        "BrowserBucket",
+        AccessControl=PublicRead,
+        DeletionPolicy='Retain',
+        Tags=Tags(stage=cfnhelper.STAGE),
+        WebsiteConfiguration=WebsiteConfiguration(
+            IndexDocument='index.html',
+        ),
+    ))
+
+    if False:
+        browserBucketPolicy = t.add_resource(BucketPolicy(
+            "BrowserBucketPolicy",
+            Bucket=Ref(browserBucket),
+            PolicyDocument={
+                "Statement": [Statement(
+                    Sid="AddPerm",
+                    Effect=Allow,
+                    Principal=Principal('*'),
+                    Action=[Action("s3:GetObject")],
+                    Resource=[
+                        Join("/", [
+                            GetAtt(browserBucket, "Arn"),
+                            '*',
+                        ]),
+                    ],
+                )],
+            }
+        ))
+
+    environmentBrowser = Environment(
+        ComputeType='BUILD_GENERAL1_SMALL',
+        Image='aws/codebuild/nodejs:7.0.0',
+        Type='LINUX_CONTAINER',
+        EnvironmentVariables=[
+            EnvironmentVariable(Name='BROWSER_S3', Value=cfnhelper.s3BucketArn(browserBucket)),
+        ],
+    )
+
+    sourceBrowser = Source(Type=CODEPIPELINE, BuildSpec='browser/buildspec.yml')
+
+    browserBuildProject = Project(
+        stackName + "BrowserBuildProject",
+        Artifacts=artifacts,
+        Environment=environmentBrowser,
+        Name=stackName+'Browser',
+        ServiceRole=codebuildRoleArn,
+        Source=sourceBrowser,
+    )
+    t.add_resource(browserBuildProject)
 
     # codepipeline -------------------
     codepipelineBucket = t.add_resource(Bucket(
@@ -187,6 +232,34 @@ def template(stackName='bigimage'):
                 ]
             ),
             Stages(
+                Name="BuildBrowserAppCopyToS3",
+                Actions=[
+                    Actions(
+                        Name="buildaction",
+                        InputArtifacts=[
+                            InputArtifacts(
+                                Name="MyApp"
+                            )
+                        ],
+                        OutputArtifacts=[
+                            OutputArtifacts(
+                                Name="BrowserOutput"
+                            )
+                        ],
+                        ActionTypeId=ActionTypeID(
+                            Category="Build",
+                            Owner="AWS",
+                            Version="1",
+                            Provider="CodeBuild"
+                        ),
+                        Configuration={
+                            "ProjectName": browserBuildProject.Name,
+                        },
+                        RunOrder="1"
+                    )
+                ]
+            ),
+            Stages(
                 Name="DeployIngestApplication",
                 Actions=[
                     Actions(
@@ -224,6 +297,13 @@ def template(stackName='bigimage'):
         Value=Ref(codeBuildProject),
         Description="codebuild ingest project",
     ))
+
+    t.add_output(Output(
+        "BrowserbuildProject",
+        Value=Ref(browserBuildProject),
+        Description="browser codebuild project",
+    ))
+
     t.add_output(Output(
         "CodebuildRoleArn",
         Value=codebuildRoleArn,
