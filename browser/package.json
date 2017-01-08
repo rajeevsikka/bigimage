@@ -1,6 +1,5 @@
 {
   "name": "browser",
-  "source": "http://keyword-us-west-2-433331399117.s3-website-us-west-2.amazonaws.com/",
   "version": "0.1.0",
   "private": true,
   "devDependencies": {
