@@ -17,6 +17,8 @@ import cfnhelper
 
 CODEPIPELINE = 'CODEPIPELINE'
 
+CODE_PIPELINE = True
+
 def id():
     return 'codepipeline.cfn.json'
 
@@ -125,7 +127,8 @@ def template(stackName='bigimage'):
         ],
     )
 
-    sourceBrowser = Source(Type=CODEPIPELINE, BuildSpec='browser/buildspec.yml')
+    #sourceBrowser = Source(Type=CODEPIPELINE, BuildSpec='ls -lR && env')
+    sourceBrowser = Source(Type=CODEPIPELINE)
 
     browserBuildProject = Project(
         stackName + "BrowserBuildProject",
@@ -135,7 +138,7 @@ def template(stackName='bigimage'):
         ServiceRole=codebuildRoleArn,
         Source=sourceBrowser,
     )
-    t.add_resource(browserBuildProject)
+    browserBuildProjectResource = t.add_resource(browserBuildProject)
 
     # codepipeline -------------------
     codepipelineBucket = t.add_resource(Bucket(
@@ -161,130 +164,126 @@ def template(stackName='bigimage'):
         Description='Git personal access token required for codepipeline'
     ))
 
-    pipeline = t.add_resource(Pipeline(
-        stackName + "codepipeline",
-        Name=stackName,
-        RoleArn=codebuildRoleArn,
-        ArtifactStore=ArtifactStore(
-            Type="S3",
-            Location=Ref(codepipelineBucket)
-        ),
-        #DisableInboundStageTransitions=[
-        #    DisableInboundStageTransitions(
-        #        StageName="Release",
-        #        Reason="Disabling the transition until "
-        #               "integration tests are completed"
-        #    )
-        #]
-        Stages=[
-            Stages(
-                Name="Source",
-                Actions=[
-                    Actions(
-                        Name="SourceAction",
-                        ActionTypeId=ActionTypeID(
-                            Category="Source",
-                            Owner="ThirdParty",
-                            Version="1",
-                            Provider="GitHub"
-                        ),
-                        OutputArtifacts=[
-                            OutputArtifacts(
-                                Name="MyApp"
-                            )
-                        ],
-                        Configuration={
-                            "Owner": "powellquiring",
-                            "Repo": "bigimage",
-                            "Branch": "master",
-                            "OAuthToken": Ref(gitPersonalAccessToken),
-                        },
-                        RunOrder="1"
-                    )
-                ]
+    if CODE_PIPELINE:
+        pipeline = t.add_resource(Pipeline(
+            stackName + "codepipeline",
+            Name=stackName,
+            RoleArn=codebuildRoleArn,
+            ArtifactStore=ArtifactStore(
+                Type="S3",
+                Location=Ref(codepipelineBucket)
             ),
-            Stages(
-                Name="BuildApplicationCloudformationTemplatesDeployCloudformationStack",
-                Actions=[
-                    Actions(
-                        Name="buildaction",
-                        InputArtifacts=[
-                            InputArtifacts(
-                                Name="MyApp"
-                            )
-                        ],
-                        OutputArtifacts=[
-                            OutputArtifacts(
-                                Name="MyBuiltApp"
-                            )
-                        ],
-                        ActionTypeId=ActionTypeID(
-                            Category="Build",
-                            Owner="AWS",
-                            Version="1",
-                            Provider="CodeBuild"
+            #DisableInboundStageTransitions=[
+            #    DisableInboundStageTransitions(
+            #        StageName="Release",
+            #        Reason="Disabling the transition until "
+            #               "integration tests are completed"
+            #    )
+            #]
+            Stages=[
+                Stages(
+                    Name="Source",
+                    Actions=[
+                        Actions(
+                            Name="SourceAction",
+                            ActionTypeId=ActionTypeID(
+                                Category="Source",
+                                Owner="ThirdParty",
+                                Version="1",
+                                Provider="GitHub"
+                            ),
+                            OutputArtifacts=[
+                                OutputArtifacts(
+                                    Name="MyApp"
+                                )
+                            ],
+                            Configuration={
+                                "Owner": "powellquiring",
+                                "Repo": "bigimage",
+                                "Branch": "master",
+                                "OAuthToken": Ref(gitPersonalAccessToken),
+                            },
+                            RunOrder="1"
+                        )
+                    ]
+                ),
+                Stages(
+                    Name="BuildAllDeployCfn",
+                    Actions=[
+                        Actions(
+                            Name="buildIngestDeployCfn",
+                            InputArtifacts=[
+                                InputArtifacts(
+                                    Name="MyApp"
+                                )
+                            ],
+                            OutputArtifacts=[
+                                OutputArtifacts(
+                                    Name="MyBuiltApp"
+                                )
+                            ],
+                            ActionTypeId=ActionTypeID(
+                                Category="Build",
+                                Owner="AWS",
+                                Version="1",
+                                Provider="CodeBuild"
+                            ),
+                            Configuration={
+                                "ProjectName": stackName,
+                            },
+                            RunOrder="1"
                         ),
-                        Configuration={
-                            "ProjectName": stackName,
-                        },
-                        RunOrder="1"
-                    )
-                ]
-            ),
-            Stages(
-                Name="BuildBrowserAppCopyToS3",
-                Actions=[
-                    Actions(
-                        Name="buildaction",
-                        InputArtifacts=[
-                            InputArtifacts(
-                                Name="MyApp"
-                            )
-                        ],
-                        OutputArtifacts=[
-                            OutputArtifacts(
-                                Name="BrowserOutput"
-                            )
-                        ],
-                        ActionTypeId=ActionTypeID(
-                            Category="Build",
-                            Owner="AWS",
-                            Version="1",
-                            Provider="CodeBuild"
+                        Actions(
+                            Name="buildBrowser",
+                            InputArtifacts=[
+                                InputArtifacts(
+                                    Name="MyApp"
+                                )
+                            ],
+                            OutputArtifacts=[
+                                OutputArtifacts(
+                                    Name="BrowserOutput"
+                                )
+                            ],
+                            ActionTypeId=ActionTypeID(
+                                Category="Build",
+                                Owner="AWS",
+                                Version="1",
+                                Provider="CodeBuild"
+                            ),
+                            Configuration={
+                                "ProjectName": browserBuildProject.Name,
+                            },
+                            RunOrder="1"
                         ),
-                        Configuration={
-                            "ProjectName": browserBuildProject.Name,
-                        },
-                        RunOrder="1"
-                    )
-                ]
-            ),
-            Stages(
-                Name="DeployIngestApplication",
-                Actions=[
-                    Actions(
-                        Name="deploybeanstalk",
-                        InputArtifacts=[
-                            InputArtifacts(
-                                Name="MyBuiltApp"
-                            )
-                        ],
-                        ActionTypeId=ActionTypeID(
-                            Category="Deploy",
-                            Owner="AWS",
-                            Version="1",
-                            Provider="ElasticBeanstalk"
-                        ),
-                        Configuration={
-                            "ApplicationName": Ref(ingestApplicationName),
-                            "EnvironmentName": Ref(ingestEnvironmentName),
-                        },
-                        RunOrder="1"
-                    )
-                ]
-            )
-        ],
-    ))
+                    ]
+                ),
+                Stages(
+                    Name="DeployIngestApplication",
+                    Actions=[
+                        Actions(
+                            Name="deploybeanstalk",
+                            InputArtifacts=[
+                                InputArtifacts(
+                                    Name="MyBuiltApp"
+                                )
+                            ],
+                            ActionTypeId=ActionTypeID(
+                                Category="Deploy",
+                                Owner="AWS",
+                                Version="1",
+                                Provider="ElasticBeanstalk"
+                            ),
+                            Configuration={
+                                "ApplicationName": Ref(ingestApplicationName),
+                                "EnvironmentName": Ref(ingestEnvironmentName),
+                            },
+                            RunOrder="1"
+                        )
+                    ]
+                )
+            ],
+        ))
 
     t.add_output(Output(
         "CodepipelineBucket",
@@ -300,7 +299,7 @@ def template(stackName='bigimage'):
 
     t.add_output(Output(
         "BrowserbuildProject",
-        Value=Ref(browserBuildProject),
+        Value=Ref(browserBuildProjectResource),
         Description="browser codebuild project",
     ))
 
