@@ -103,29 +103,29 @@ def template(stackName='bigimage'):
         ),
     ))
 
-    if False:
-        browserBucketPolicy = t.add_resource(BucketPolicy(
-            "BrowserBucketPolicy",
-            Bucket=Ref(browserBucket),
-            PolicyDocument={
-                "Statement": [Statement(
-                    Sid="AddPerm",
-                    Effect=Allow,
-                    Principal=Principal('*'),
-                    Action=[Action("s3:GetObject")],
-                    Resource=[
-                        Join("/", [
-                            GetAtt(browserBucket, "Arn"),
-                            '*',
-                        ]),
-                    ],
-                )],
-            }
-        ))
-
     browserS3Ref = Ref(browserBucket)
     browserS3WebsiteUrl = GetAtt(browserBucket, "WebsiteURL")
     browserS3Arn = cfnhelper.s3BucketArn(browserBucket)
+
+    browserBucketPolicy = t.add_resource(BucketPolicy(
+        "BrowserBucketPolicy",
+        Bucket=Ref(browserBucket),
+        PolicyDocument={
+            "Version": "2012-10-17",
+            "Statement": [Statement(
+                Effect=Allow,
+                Sid="AddPerm",
+                Principal=Principal('*'),
+                Resource=[
+                    Join("/", [
+                        browserS3Arn,
+                        '*',
+                    ]),
+                ],
+                Action=[Action("s3", "GetObject")],
+            )],
+        }
+    ))
 
     environmentBrowser = Environment(
         ComputeType='BUILD_GENERAL1_SMALL',
@@ -144,25 +144,12 @@ version: 0.1
 
 environment_variables:
   plaintext:
-    POWELL: "value"
+    ENVTESTITVALUE: "value"
 
 phases:
-  install:
-    commands:
-      - npm install -g create-react-app
-
   build:
     commands:
-      - echo $SHELL
-      - env
-      - ls -lR
-      - cd browser && npm run build
-      - ls -lR
-
-artifacts:
-  files:
-    - build/*
-  discard-paths: no
+      - cd browser && bash build.bash
 '''
     sourceBrowser = Source(Type=CODEPIPELINE, BuildSpec=buildSpec)
 
