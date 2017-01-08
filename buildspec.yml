@@ -15,13 +15,12 @@ phases:
       - echo $SHELL
       - env
       - ls -lR
-      - set
       # - python ./cfm/run.py
       - mkdir build
       - echo hello > build/hello.txt
-      - ls -lR
-      - unzip -d build build/python-v1.zip
-      - ls -lR
+      #- ls -lR
+      #- unzip -d build build/python-v1.zip
+      #- ls -lR
 
 artifacts:
   files:
