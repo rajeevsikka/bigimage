@@ -19,7 +19,7 @@ from troposphere.apigateway import ApiKey, StageKey
 import os
 import cfnhelper
 
-REST_API = False # can turn off for testing
+REST_API = True # can turn off for testing
 STAGE_NAME = 'v1'
 
 def id():
