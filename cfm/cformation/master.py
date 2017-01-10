@@ -80,24 +80,25 @@ def template(stackName='bigimage'):
         # propogate all outputs from the firehose template
         cfnhelper.propogateNestedStackOutputs(t, ingestStack, ingest.template(), "Ingest")
 
-    if CODEPIPELINE:
-        codepipelineStack = t.add_resource(Stack(
-            'CodepipelineStack',
-            TemplateURL=Join('/', [Ref(templateBucket), codepipeline.id()]),
-            Parameters={
-                'IngestApplicationName': GetAtt(ingestStack, "Outputs.ApplicationName"),
-                'IngestEnvironmentName': GetAtt(ingestStack, "Outputs.EnvironmentName"),
-                'GitPersonalAccessToken': Ref(gitPersonalAccessToken),
-            },
-        ))
-        cfnhelper.propogateNestedStackOutputs(t, codepipelineStack, codepipeline.template(), "Codepipeline")
-
     if API_LAMBDA:
         apiStack = t.add_resource(Stack(
             'ApiStack',
             TemplateURL=Join('/', [Ref(templateBucket), api_lambda.id()]),
         ))
         cfnhelper.propogateNestedStackOutputs(t, apiStack, api_lambda.template(), "External")
+
+    if CODEPIPELINE:
+        codepipelineStack = t.add_resource(Stack(
+            'CodepipelineStack',
+            TemplateURL=Join('/', [Ref(templateBucket), codepipeline.id()]),
+            Parameters={
+                'ExternalApiEndpointkeyword': GetAtt(apiStack, "Outputs.ApiEndpointkeyword"),
+                'IngestApplicationName': GetAtt(ingestStack, "Outputs.ApplicationName"),
+                'IngestEnvironmentName': GetAtt(ingestStack, "Outputs.EnvironmentName"),
+                'GitPersonalAccessToken': Ref(gitPersonalAccessToken),
+            },
+        ))
+        cfnhelper.propogateNestedStackOutputs(t, codepipelineStack, codepipeline.template(), "Codepipeline")
 
     return t
 

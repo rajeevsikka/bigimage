@@ -59,7 +59,7 @@ def template(stackName='bigimage'):
     apiLambda = "lambda:path/2015-03-31/functions"
     lambdaFunctionsJoin = Join(":", [apiGateway, Ref(AWS_REGION), apiLambda])
 
-    # TODO managing code for cloudformation and for python in the same file seems bad
+    # read the lambda function from a file
     codeString=lambdaFunctionKeyword()
 
     apiRequestTemplateString=jsonFunctionStringApiGatewayMapping()
@@ -158,7 +158,7 @@ def template(stackName='bigimage'):
             Integration=Integration(
                 CacheKeyParameters=[methodRequestQuerystringWord],
                 Credentials=GetAtt(lambdaExecutionRole, "Arn"),
-                Type="AWS",
+                Type="AWS_PROXY",
                 IntegrationHttpMethod='POST', #TODO changed from GET
                 IntegrationResponses=[
                     IntegrationResponse(
@@ -174,7 +174,7 @@ def template(stackName='bigimage'):
             ),
             MethodResponses=[
                 MethodResponse(
-                    "CatResponse",
+                    ResponseModels={"application/json": "Empty"},
                     StatusCode='200'
                 )
             ],

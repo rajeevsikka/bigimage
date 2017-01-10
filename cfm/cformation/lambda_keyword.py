@@ -68,5 +68,10 @@ def lambda_handler(event, context):
             print('delete:', key)
             context_vars.pop(key)
     
-    ret = {'ret':tweets, 'version': '2.2', '~environ': dict(os.environ), '~event': event, '~context': context_vars}
+    body = json.dumps({'ret':tweets, 'version': '2.2', '~environ': dict(os.environ), '~event': event, '~context': context_vars})
+    ret = {
+        "statusCode": 200,
+        "headers": { "Access-Control-Allow-Origin": "*"},
+        "body": body,
+    }
     return ret

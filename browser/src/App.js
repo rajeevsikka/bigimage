@@ -3,33 +3,6 @@ import logo from './logo.png';
 import axios from 'axios';
 import './App.css';
 
-/*
-function Welcome(props) {
-  return <h1>Hello, {props.name}</h1>;
-}
-*/
-
-class Welcome extends Component {
-  render() {
-    return (
-      <h1>Hello2, {this.props.name}</h1>
-    );
-  }
-}
-
-
-class Floor extends Component {
-  render() {
-    return (
-      <div>
-        <Welcome name="Sara" />
-        <Welcome name="Cahal" />
-        <Welcome name="Edite" />
-      </div>
-    );
-  }
-}
-
 class Wall extends Component {
   constructor(props) {
     super(props)
@@ -56,9 +29,6 @@ class Wall extends Component {
 
   render() {
     return (
-/*
-      <Floor />
-*/
       <div>
         <h1>Jobs!</h1>
         {this.state.jobs.map(function(job) {
@@ -83,17 +53,32 @@ class Wall extends Component {
 
 class App extends Component {
   render() {
-    return (
-      <div className="App">
-        <div className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <h2>Welcome to Keyword</h2>
+    console.log("process.env.REACT_APP_API_ENDPOINT_URL:", process.env.REACT_APP_API_ENDPOINT_URL)
+    if (typeof process.env.REACT_APP_API_ENDPOINT_URL === 'undefined') {
+      return (
+        <div className="App">
+          <div className="App-header">
+            <img src={logo} className="App-logo" alt="logo" />
+            <p>Welcome to Keyword</p>
+            <p>before running or building this program you must set the environment variable that identifies the keyword URL.  Something like this:</p>
+            <p></p>
+            <p>$export REACT_APP_API_ENDPOINT_URL=https://cr3fsvbvt3.execute-api.us-west-2.amazonaws.com/v1/keyword </p>
+          </div>
         </div>
-        <div>
-            <Wall source="https://3kaszefv3c.execute-api.us-west-2.amazonaws.com/v1/keyword"/>
+      );
+    } else {
+      return (
+        <div className="App">
+          <div className="App-header">
+            <img src={logo} className="App-logo" alt="logo" />
+            <h2>Welcome to Keyword</h2>
+          </div>
+          <div>
+              <Wall source={process.env.REACT_APP_API_ENDPOINT_URL}/>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
             /* <Wall source="http://codepen.io/jobs.json"/> */
 

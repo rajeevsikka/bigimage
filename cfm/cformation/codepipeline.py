@@ -30,6 +30,28 @@ def template(stackName='bigimage'):
 
     t.add_description('Codepipeline and codebuild for ' + stackName)
 
+    externalApiEndpointkeyword = t.add_parameter(Parameter(
+        "ExternalApiEndpointkeyword",
+        Description="Endpoint for this stage of the api"
+        Type="String"
+    ))
+    ingestApplicationName = t.add_parameter(Parameter(
+        "IngestApplicationName",
+        Description="ingest beanstalk application name",
+        Type="String"
+    ))
+    ingestEnvironmentName = t.add_parameter(Parameter(
+        "IngestEnvironmentName",
+        Description="ingest beanstalk environment name",
+        Type="String"
+    ))
+    gitPersonalAccessToken = t.add_parameter(Parameter(
+        'GitPersonalAccessToken',
+        Type='String',
+        Description='Git personal access token required for codepipeline'
+    ))
+
+
     # Create the role with a trust relationship that allows codebuild to assume the role
     # TODO the code build role runs the run.py to do the complete roll out and needs lots of privileges, the pipeline does not
     codeRole = t.add_resource(Role(
@@ -132,6 +154,7 @@ def template(stackName='bigimage'):
         Image='aws/codebuild/nodejs:7.0.0',
         Type='LINUX_CONTAINER',
         EnvironmentVariables=[
+            EnvironmentVariable(Name='REACT_APP_API_ENDPOINT_URL', Value=Ref(externalApiEndpointkeyword),
             EnvironmentVariable(Name='BROWSER_S3_WEBSITE_URL', Value=browserS3WebsiteUrl),
             EnvironmentVariable(Name='BROWSER_S3_REF', Value=browserS3Ref),
             EnvironmentVariable(Name='BROWSER_S3_ARN', Value=browserS3Arn),
@@ -170,22 +193,6 @@ phases:
         AccessControl=PublicRead,
         DeletionPolicy='Retain',
         Tags=Tags(stage=cfnhelper.STAGE),
-    ))
-
-    ingestApplicationName = t.add_parameter(Parameter(
-        "IngestApplicationName",
-        Description="ingest beanstalk application name",
-        Type="String"
-    ))
-    ingestEnvironmentName = t.add_parameter(Parameter(
-        "IngestEnvironmentName",
-        Description="ingest beanstalk environment name",
-        Type="String"
-    ))
-    gitPersonalAccessToken = t.add_parameter(Parameter(
-        'GitPersonalAccessToken',
-        Type='String',
-        Description='Git personal access token required for codepipeline'
     ))
 
     if CODE_PIPELINE:
