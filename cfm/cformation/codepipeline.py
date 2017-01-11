@@ -32,7 +32,7 @@ def template(stackName='bigimage'):
 
     externalApiEndpointkeyword = t.add_parameter(Parameter(
         "ExternalApiEndpointkeyword",
-        Description="Endpoint for this stage of the api"
+        Description="Endpoint for this stage of the api",
         Type="String"
     ))
     ingestApplicationName = t.add_parameter(Parameter(
@@ -154,7 +154,7 @@ def template(stackName='bigimage'):
         Image='aws/codebuild/nodejs:7.0.0',
         Type='LINUX_CONTAINER',
         EnvironmentVariables=[
-            EnvironmentVariable(Name='REACT_APP_API_ENDPOINT_URL', Value=Ref(externalApiEndpointkeyword),
+            EnvironmentVariable(Name='REACT_APP_API_ENDPOINT_URL', Value=Ref(externalApiEndpointkeyword)),
             EnvironmentVariable(Name='BROWSER_S3_WEBSITE_URL', Value=browserS3WebsiteUrl),
             EnvironmentVariable(Name='BROWSER_S3_REF', Value=browserS3Ref),
             EnvironmentVariable(Name='BROWSER_S3_ARN', Value=browserS3Arn),

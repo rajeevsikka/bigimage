@@ -59,7 +59,10 @@ def lambda_handler(event, context):
     time.sleep(SLEEP)
     context_vars = dict(vars(context))
     keys = list(context_vars.keys())
-    word = event.get('params', {}).get('querystring', {}).get('word', 'coffee')
+    queryStringParameters = event.get('queryStringParameters', {})
+    if queryStringParameters is None:
+        queryStringParameters = {}
+    word = queryStringParameters.get('word', 'coffee')
     tweets = condensedTweets(word)
     for key in keys:
         try:
