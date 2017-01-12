@@ -14,9 +14,16 @@ phases:
     commands:
       - echo $SHELL
       - env
+
+      # create cloudformation templates, zip files, ... and deploy them
       - python ./cfm/run.py
-      - mkdir build
-      - unzip -d build build/python-v1.zip
+
+      # create the build directory output from the python-v1 ingest program program
+      # the build/ directory is the output of this stage in the pipeline (fed into the elasticbeanstalk deploy)
+      - mv build/python-v1.zip .
+      - rm -rf build
+      - mkdir -p build
+      - unzip -d build python-v1.zip
 
 artifacts:
   files:
