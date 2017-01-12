@@ -3,11 +3,33 @@ import logo from './logo.png';
 import axios from 'axios';
 import './App.css';
 
-// wall of twitter matches of the supplied input
+
+class Tweet extends React.Component {
+  render() {
+    var tweet = this.props.tweet
+    return (
+      <div key={tweet.text} className="tweet">
+        <a href={tweet.url}>
+          {tweet.text}
+        </a>
+        {tweet.images.map(function(image) {
+          return (
+            <div key={image}>
+            <a href={tweet.url}>
+              <img alt={tweet.text} src={image}/>
+            </a>
+            </div>
+          );
+        })}
+      </div>
+    )}
+}
+
+// sheet of twitter matches of the supplied input
 class TwitterOutput extends React.Component {
   constructor(props) {
     super(props)
-    this.state = {jobs:[], source:props.source}
+    this.state = {tweets:[], source:props.source}
   }
 
   loadJobs(source) {
@@ -22,7 +44,7 @@ class TwitterOutput extends React.Component {
       console.dir(result)
       delete th.cancelTokenSource;
       th.setState({
-        jobs: result.data.ret
+        tweets: result.data.ret.ret
       });
     })
     .catch(function(err) {
@@ -45,7 +67,7 @@ class TwitterOutput extends React.Component {
     console.dir(nextProps);
     this.setState(nextProps);
     if (nextProps.hasOwnProperty('source')) {
-      this.setState({jobs:[]}); // jobs are unknown since the source has changed
+      this.setState({tweets:[]}); // tweets are unknown since the source has changed
       this.loadJobs(nextProps.source);
     }
   }
@@ -66,17 +88,10 @@ class TwitterOutput extends React.Component {
     console.log("output render")
     return (
       <div>
-        <h1>Jobs!</h1>
-        {this.state.jobs.map(function(job) {
+        <h1>Tweets!</h1>
+        {this.state.tweets.map(function(tweet) {
           return (
-            <div key={job.text} className="job">
-              <a href={job.url}>
-                {job.tet}
-                is looking for a 
-                {job.tet}
-                {job.tet}
-              </a>
-            </div>
+            <Tweet key={tweet.url} tweet={tweet} />
           );
         })}
       </div>
@@ -166,13 +181,15 @@ class App extends React.Component {
     if (typeof process.env.REACT_APP_API_ENDPOINT_URL === 'undefined') {
       return (<AppError/>);
     }
+    var endpointUrl = process.env.REACT_APP_API_ENDPOINT_URL
     return (
       <div className="App">
         <div className="App-header">
           <img src={logo} className="App-logo" alt="logo" />
           <h2>Welcome to Keyword</h2>
+          <p>endpoint: {endpointUrl}</p>
         </div>
-        <Page source={process.env.REACT_APP_API_ENDPOINT_URL}/>
+        <Page source={endpointUrl}/>
       </div>
     );
   }

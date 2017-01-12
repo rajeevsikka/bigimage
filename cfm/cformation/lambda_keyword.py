@@ -42,7 +42,9 @@ def condensedTweets(word):
 
     result = json.loads(resultString)
     ret=[]
+    allTweets=[]
     for tweet in result['hits']['hits']:
+        allTweets.append(tweet)
         tweetEntry = {}
         tweetEntry['text'] = tweet['_source']['text']
         id = tweet['_source']['id']
@@ -50,7 +52,7 @@ def condensedTweets(word):
         tweetEntry['videos'] = extractVideos(tweet)
         tweetEntry['images'] = extractImages(tweet)
         ret.append(tweetEntry)
-    return ret
+    return {'ret': ret, 'tweets': allTweets}
 
 def lambda_handler(event, context):
     print("Received event: " + json.dumps(event, indent=2))
