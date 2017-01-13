@@ -27,3 +27,36 @@ For example change the file python-v1/application/application.py VERSION string 
         }
     }'
 
+# Restricting access to credentials
+The above credentials are only accessible to those that have access to my aws account.
+If the account is used for a project with lots of users then all the users would have access to the creds.
+I ran the following test to verify that the --key-id parameter could be used to restrict access to a smaller set of users by using IAM policies.
+A role assigned to the twitter ingest app would need to have access to the kms key as well.
+
+Create a yesuser and nouser and give them ssm capabilities.
+Created a kms key "deleteme" in us-west-2.
+When creating the key give yesuser all of the capabilities to use the key (nouser gets nothing)
+The arn is included in the commands below
+
+Test creating with yes user and get with yesuser and no user.  nouser should have access:
+    aws ssm put-parameter --name nokey --value secret --type SecureString
+    aws ssm get-parameters --names nokey --with-decryption
+
+
+Test again using the --key-id arn that only the yesuser has access and verify that the nouser can not get to this key:
+    aws ssm put-parameter --name yeskey --value secret2 --type SecureString --key-id arn:aws:kms:us-west-2:433331399117:key/c92ffcf8-1d03-40ce-80ca-9ccf7f648ea2
+    aws ssm get-parameters --names yeskey --with-decryption 
+
+
+Create access keys for each user.  Something like the following:
+
+    yesuser
+    export AWS_ACCESS_KEY_ID=AKIAJC5TYZIBO4OTPTBA
+    export AWS_SECRET_ACCESS_KEY=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
+    PS1='yes $'
+
+    nouser
+    export AWS_ACCESS_KEY_ID=AKIAJOSHBLTHBTDQPSYA
+    export AWS_SECRET_ACCESS_KEY=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
+    PS1='no $'
+
