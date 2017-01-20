@@ -1,0 +1,53 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "databaseAccounts_rsikka_documentdb_name_1": {
+            "defaultValue": "template-rsikka-documentdb",
+            "type": "String"
+        },
+        "searchServices_rsikka_search_name": {
+            "defaultValue": "template-rsikka-search",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "comments": "Generalized from resource: '/subscriptions/7860a7bb-dcb0-49eb-ad7e-4ada0a7f90c5/resourceGroups/bigdataUsecase/providers/Microsoft.DocumentDB/databaseAccounts/template-rsikka-documentdb'.",
+            "type": "Microsoft.DocumentDB/databaseAccounts",
+            "kind": "GlobalDocumentDB",
+            "name": "[parameters('databaseAccounts_rsikka_documentdb_name_1')]",
+            "apiVersion": "2015-04-08",
+            "location": "West US",
+            "tags": {},
+            "properties": {
+                "databaseAccountOfferType": "Standard",
+                "consistencyPolicy": {
+                    "defaultConsistencyLevel": "Session",
+                    "maxIntervalInSeconds": 5,
+                    "maxStalenessPrefix": 100
+                }
+            },
+            "resources": [],
+            "dependsOn": []
+        },
+        {
+            "comments": "Generalized from resource: '/subscriptions/7860a7bb-dcb0-49eb-ad7e-4ada0a7f90c5/resourceGroups/bigdataUsecase/providers/Microsoft.Search/searchServices/template-rsikka-search'.",
+            "type": "Microsoft.Search/searchServices",
+            "sku": {
+                "name": "standard"
+            },
+            "name": "[parameters('searchServices_rsikka_search_name')]",
+            "apiVersion": "2015-08-19",
+            "location": "West US",
+            "properties": {
+                "replicaCount": 1,
+                "partitionCount": 1,
+                "hostingMode": "Default"
+            },
+            "resources": [],
+            "dependsOn": []
+        }
+    ]
+}
